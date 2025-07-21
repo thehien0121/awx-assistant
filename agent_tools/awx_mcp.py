@@ -50,50 +50,6 @@ async def job_logs(job_id: int) -> str:
     return await make_request(f"{AAP_URL}/jobs/{job_id}/stdout/")
 
 @function_tool
-async def create_project(
-    name: str,
-    organization_id: int,
-    source_control_url: str,
-    source_control_type: str = "git",
-    description: str = "",
-    execution_environment_id: int = None,
-    content_signature_validation_credential_id: int = None,
-    source_control_branch: str = "",
-    source_control_refspec: str = "",
-    source_control_credential_id: int = None,
-    clean: bool = False,
-    update_revision_on_launch: bool = False,
-    delete: bool = False,
-    allow_branch_override: bool = False,
-    track_submodules: bool = False,
-) -> Any:
-    """Create a new project in Ansible Automation Platform."""
-
-    payload = {
-        "name": name,
-        "description": description,
-        "organization": organization_id,
-        "scm_type": source_control_type.lower(),  # Git is default
-        "scm_url": source_control_url,
-        "scm_branch": source_control_branch,
-        "scm_refspec": source_control_refspec,
-        "scm_clean": clean,
-        "scm_delete_on_update": delete,
-        "scm_update_on_launch": update_revision_on_launch,
-        "allow_override": allow_branch_override,
-        "scm_track_submodules": track_submodules,
-    }
-
-    if execution_environment_id:
-        payload["execution_environment"] = execution_environment_id
-    if content_signature_validation_credential_id:
-        payload["signature_validation_credential"] = content_signature_validation_credential_id
-    if source_control_credential_id:
-        payload["credential"] = source_control_credential_id
-
-    return await make_request(f"{AAP_URL}/projects/", method="POST", json=payload)
-
-@function_tool
 async def create_job_template(
     name: str,
     project_id: int,
@@ -1180,7 +1136,7 @@ async def create_project(
     Args:
         name: Name of the project
         description: Description of the project
-        scm_type: SCM type (git, svn, archive, manual)
+        scm_type: SCM type (git, svn, archive, manual -  leave it blank if manual)
         scm_url: SCM URL for the project
         scm_branch: SCM branch to use
         scm_clean: Whether to clean the project before each update
