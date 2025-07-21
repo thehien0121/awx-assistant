@@ -17,7 +17,7 @@ import json
 # --- Redis Client Initialization ---
 # Assumes Redis is running on the default host and port.
 # decode_responses=True ensures that Redis returns strings, not bytes.
-redis_client = redis.Redis(host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT"), db=os.getenv("REDIS_DB"))
+redis_client = redis.Redis(host=os.getenv("REDIS_HOST"), port=os.getenv("REDIS_PORT"), db=os.getenv("REDIS_DB"), password=os.getenv("REDIS_PASSWORD"))
 
 # --- SDK Configuration for Non-OpenAI Providers ---
 # These settings are based on the official documentation for using custom model providers.
