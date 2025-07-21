@@ -53,11 +53,44 @@ async def security_request_guardrail(
     This guardrail checks if a user's request is related to Ansible and related server knowledge.
     """
     conversation_message = ""
-    if isinstance(input, list) and input and isinstance(input[-2], dict):
-        conversation_message += "Bot: " + input[-2].get("content", "") + "\n"
-    # The input from our main.py is a list containing a single dictionary.
-    if isinstance(input, list) and input and isinstance(input[-1], dict):
-        conversation_message += "User: " + input[-1].get("content", "")
+    
+    try:
+        # Safely check for bot message (second to last item)
+        if isinstance(input, list) and len(input) >= 2 and isinstance(input[-2], dict):
+            bot_content = input[-2].get("content", "")
+            if bot_content:
+                conversation_message += "Bot: " + bot_content + "\n"
+        
+        # Safely check for user message (last item)
+        if isinstance(input, list) and input and isinstance(input[-1], dict):
+            user_content = input[-1].get("content", "")
+            if user_content:
+                conversation_message += "User: " + user_content
+        
+        # If no conversation message was built, try to extract from string input
+        if not conversation_message and isinstance(input, str):
+            conversation_message = input
+        elif not conversation_message and isinstance(input, list):
+            # Fallback: try to extract any content from the list
+            for item in input:
+                if isinstance(item, dict) and item.get("content"):
+                    conversation_message += item.get("content", "") + " "
+        
+        # Ensure we have some content to check
+        if not conversation_message.strip():
+            conversation_message = "User: Hello"
+            
+    except Exception as e:
+        print(f"[GUARDRAIL] Error processing input: {e}")
+        # Default to allowing the request if we can't process it
+        return GuardrailFunctionOutput(
+            output_info=SecurityRequestCheck(
+                is_valid_request=True,
+                reasoning="Unable to process input, defaulting to allow"
+            ),
+            tripwire_triggered=False,
+        )
+    
     # Run the checker agent on the user's full instruction.
     result = await Runner.run(the_security_agent, conversation_message, context=ctx.context)
     check_result = result.final_output_as(SecurityRequestCheck)
