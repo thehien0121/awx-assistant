@@ -6,4 +6,4 @@ python-dotenv==1.0.1
 openai-agents
 asyncio-mqtt==0.16.2
 httpx==0.28.1 
-logfire
+logfire[fastapi]
