@@ -300,4 +300,4 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 # --- Uvicorn Server Runner ---
 # This block allows you to run the server directly with `python main.py`
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=os.getenv("MAIN_PORT"), reload=True)
