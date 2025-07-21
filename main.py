@@ -194,7 +194,7 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
         prompt_input = history.copy()
         prompt_input.append({"role": "user", "content": user_message})
         print(f"[WORKFLOW] Executing agent: {the_leader_agent.name}")
-        stream = Runner.run_streamed(the_leader_agent, prompt_input)
+        stream = Runner.run_streamed(the_leader_agent, prompt_input, max_turns=20)
         final_text_content = ""
         async for event in stream.stream_events():
             if event.type == "raw_response_event" and isinstance(event.data, ChatCompletionChunk):
