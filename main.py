@@ -48,6 +48,7 @@ set_default_openai_api("chat_completions")
 
 # --- Load Environment Variables ---
 # Make sure you have a .env file with your AI_MODEL and other credentials
+print("DEBUG ENV_PATH:", os.getenv("ENV_PATH", ".env"))
 load_dotenv(os.getenv("ENV_PATH", ".env"))
 
 # --- Core Agent Imports ---
