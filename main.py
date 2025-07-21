@@ -1,7 +1,7 @@
 import os
 import uvicorn
 import datetime
-
+from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from typing import Dict, List
@@ -13,6 +13,12 @@ from contextlib import asynccontextmanager
 import logfire
 import redis
 import json
+
+# --- Load Environment Variables ---
+# Make sure you have a .env file with your AI_MODEL and other credentials
+dotenv_file = Path(__file__).parent / ".env"
+print("DEBUG load_dotenv file:", dotenv_file)
+load_dotenv(dotenv_file)
 
 # --- Redis Client Initialization ---
 # Assumes Redis is running on the default host and port.
@@ -45,11 +51,6 @@ set_tracing_disabled(True)
 # Most providers, including OpenRouter, use the Chat Completions API format.
 # The SDK defaults to the 'responses' API, which can cause 404 errors.
 set_default_openai_api("chat_completions")
-
-# --- Load Environment Variables ---
-# Make sure you have a .env file with your AI_MODEL and other credentials
-print("DEBUG ENV_PATH:", os.getenv("ENV_PATH", ".env"))
-load_dotenv(os.getenv("ENV_PATH", ".env"))
 
 # --- Core Agent Imports ---
 from agents import Agent, Runner 
