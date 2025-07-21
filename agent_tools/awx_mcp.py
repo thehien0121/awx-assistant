@@ -126,38 +126,6 @@ async def get_inventory_source(inventory_source_id: int) -> Any:
     """Get details of a specific inventory source."""
     return await make_request(f"{AAP_URL}/inventory_sources/{inventory_source_id}/")
 
-@function_tool
-async def create_inventory_source(
-    name: str,
-    inventory_id: int,
-    source: str,
-    credential_id: int,
-    source_vars: dict = None,
-    update_on_launch: bool = True,
-    timeout: int = 0,
-) -> Any:
-    """Create a dynamic inventory source. Claude will ask for the source type and credential before proceeding."""
-    valid_sources = [
-        "file", "constructed", "scm", "ec2", "gce", "azure_rm", "vmware", "satellite6", "openstack", 
-        "rhv", "controller", "insights", "terraform", "openshift_virtualization"
-    ]
-    
-    if source not in valid_sources:
-        return f"Error: Invalid source type '{source}'. Please select from: {', '.join(valid_sources)}"
-    
-    if not credential_id:
-        return "Error: Credential is required to create an inventory source."
-    
-    payload = {
-        "name": name,
-        "inventory": inventory_id,
-        "source": source,
-        "credential": credential_id,
-        "source_vars": source_vars,
-        "update_on_launch": update_on_launch,
-        "timeout": timeout,
-    }
-    return await make_request(f"{AAP_URL}/inventory_sources/", method="POST", json=payload)
 
 @function_tool
 async def update_inventory_source(inventory_source_id: int, update_data: dict) -> Any:
@@ -1197,7 +1165,7 @@ async def update_project(
         project_id: ID of the project to update
         name: Name of the project
         description: Description of the project
-        scm_type: SCM type (git, svn, archive, manual)
+        scm_type: SCM type (git, svn, archive), default is "", "" means manual
         scm_url: SCM URL for the project
         scm_branch: SCM branch to use
         scm_clean: Whether to clean the project before each update
@@ -2784,7 +2752,62 @@ async def create_inventory_source(
     enabled_value: str = "",
     host_filter: str = "",
 ) -> Any:
-    """Create a new inventory source."""
+    """
+    Create a new inventory source.
+    Args:
+        name: Name of this inventory source. (string, required)
+
+        description: Optional description of this inventory source. (string, default="")
+
+        source: (choice)
+
+        file: File, Directory or Script
+        constructed: Template additional groups and hostvars at runtime
+        scm: Sourced from a Project
+        ec2: Amazon EC2
+        gce: Google Compute Engine
+        azure_rm: Microsoft Azure Resource Manager
+        vmware: VMware vCenter
+        satellite6: Red Hat Satellite 6
+        openstack: OpenStack
+        rhv: Red Hat Virtualization
+        controller: Red Hat Ansible Automation Platform
+        insights: Red Hat Insights
+        source_path: (string, default="")
+
+        source_vars: Inventory source variables in YAML or JSON format. (string, default="")
+
+        scm_branch: Inventory source SCM branch. Project default used if blank. Only allowed if project allow_override field is set to true. (string, default="")
+
+        credential: Cloud credential to use for inventory updates. (integer, default=None)
+
+        enabled_var: Retrieve the enabled state from the given dict of host variables. The enabled variable may be specified as "foo.bar", in which case the lookup will traverse into nested dicts, equivalent to: from_dict.get("foo", {}).get("bar", default) (string, default="")
+
+        enabled_value: Only used when enabled_var is set. Value when the host is considered enabled. For example if enabled_var="status.power_state"and enabled_value="powered_on" with host variables:{ "status": { "power_state": "powered_on", "created": "2018-02-01T08:00:00.000000Z:00", "healthy": true }, "name": "foobar", "ip_address": "192.168.2.1"}The host would be marked enabled. If power_state where any value other than powered_on then the host would be disabled when imported. If the key is not found then the host will be enabled (string, default="")
+
+        host_filter: This field is deprecated and will be removed in a future release. Regex where only matching hosts will be imported. (string, default="")
+
+        overwrite: Overwrite local groups and hosts from remote inventory source. (boolean, default=False)
+
+        overwrite_vars: Overwrite local variables from remote inventory source. (boolean, default=False)
+
+        timeout: The amount of time (in seconds) to run before the task is canceled. (integer, default=0)
+
+        verbosity: (choice)
+
+        0: 0 (WARNING)
+        1: 1 (INFO) (default)
+        2: 2 (DEBUG)
+        limit: Enter host, group or pattern match (string, default="")
+
+        execution_environment: The container image to be used for execution. (id, default=``)
+
+        update_on_launch: (boolean, default=False)
+
+        update_cache_timeout: (integer, default=0)
+
+        source_project: Project containing inventory file used as source. (id, default=``)
+    """
     data = {
         "name": name,
         "source": source,
