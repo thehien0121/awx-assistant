@@ -121,7 +121,7 @@ the_leader_agent = Agent(
     handoffs=[chat_agent, awx_worker_agent],
     model=os.getenv("AI_MODEL"),
     # Attach the input guardrail here. It will run before the agent's logic.
-    input_guardrails=[security_request_guardrail],
+    # input_guardrails=[security_request_guardrail],
     output_type=leader_output,
 )
 
@@ -244,6 +244,9 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
             "request_type": socket_request_type["chat"],
             "content": {"explanation": "I am here to help you with Ansible AWX so right now I can't help you with that."}
         })
+        user_message = data.get("content", "")
+        updated_history = history + [{"role": "user", "content": user_message}, {"role": "assistant", "content": "I am here to help you with Ansible AWX so right now I can't help you with that."}]
+        save_history(user_id, updated_history)
         # This turn failed, so we don't return anything or modify history.
         return
 
