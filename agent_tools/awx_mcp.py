@@ -1136,7 +1136,7 @@ async def create_project(
     Args:
         name: Name of the project
         description: Description of the project
-        scm_type: SCM type (git, svn, archive, manual -  leave it blank if manual)
+        scm_type: SCM type (git, svn, archive), default is "", "" means manual
         scm_url: SCM URL for the project
         scm_branch: SCM branch to use
         scm_clean: Whether to clean the project before each update
