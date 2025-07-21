@@ -1,5 +1,6 @@
 import os
 import uvicorn
+import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -243,6 +244,42 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
 
 
 # ==========================================================
+# --- Health Check Endpoint ---
+# ==========================================================
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint to verify server status and dependencies.
+    """
+    try:
+        # Check Redis connection
+        redis_status = "healthy"
+        try:
+            redis_client.ping()
+        except Exception as e:
+            redis_status = f"unhealthy: {str(e)}"
+        
+        # Check active WebSocket connections
+        active_ws_count = len(active_connections)
+        
+        return {
+            "status": "healthy",
+            "timestamp": str(datetime.datetime.now()),
+            "version": "2.0.0",
+            "services": {
+                "redis": redis_status,
+                "websocket_connections": active_ws_count
+            },
+            "uptime": "running"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "timestamp": str(datetime.datetime.now()),
+            "error": str(e)
+        }
+
+# ==========================================================
 # --- WebSocket Connection Management ---
 # This dictionary will hold active connections, allowing us to manage them if needed.
 # ==========================================================
@@ -300,4 +337,5 @@ async def websocket_endpoint(websocket: WebSocket, user_id: str):
 # --- Uvicorn Server Runner ---
 # This block allows you to run the server directly with `python main.py`
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=os.getenv("MAIN_PORT"), reload=True)
+    port = int(os.getenv("MAIN_PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
