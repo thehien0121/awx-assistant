@@ -131,6 +131,10 @@ def get_history(user_id: str, all_fields: bool = False) -> List[Dict]:
     Get the saved history of the conversation for a given user and project from Redis.
     If the history contains more than 20 items, only the last 20 are returned.
     """
+    if redis_client is None:
+        print("Redis not available, returning empty history")
+        return []
+        
     redis_key = f"awx_chat_{user_id}"
     try:
         user_data = redis_client.get(redis_key)
@@ -157,6 +161,10 @@ def save_history(user_id: str, new_history: List[Dict]):
     """
     Save the updated conversation history back to Redis.
     """
+    if redis_client is None:
+        print("Redis not available, skipping history save")
+        return
+        
     redis_key = f"awx_chat_{user_id}"
     try:
         # Start a transaction
@@ -264,10 +272,13 @@ async def health_check():
     try:
         # Check Redis connection
         redis_status = "healthy"
-        try:
-            redis_client.ping()
-        except Exception as e:
-            redis_status = f"unhealthy: {str(e)}"
+        if redis_client is None:
+            redis_status = "not available"
+        else:
+            try:
+                redis_client.ping()
+            except Exception as e:
+                redis_status = f"unhealthy: {str(e)}"
         
         # Check active WebSocket connections
         active_ws_count = len(active_connections)
