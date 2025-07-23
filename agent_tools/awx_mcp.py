@@ -639,6 +639,106 @@ def get_credential(credential_id: int) -> str:
         credential = client.request("GET", f"/api/v2/credentials/{credential_id}/")
         return json.dumps(credential, indent=2)
 
+@function_tool
+def create_credential(
+    name: str,
+    credential_type: int,
+    inputs: str = "{}",
+    organization: int = None,
+    user: int = None,
+    team: int = None,
+    description: str = ""
+) -> str:
+    """Create a new credential.
+    
+    Args:
+        name: Name of this credential (required)
+        credential_type: Specify the type of credential you want to create (required)
+        inputs: Enter inputs using JSON syntax (default: {})
+        organization: Inherit permissions from organization roles (default: None)
+        user: Write-only field used to add user to owner role (default: None)
+        team: Write-only field used to add team to owner role (default: None)
+        description: Optional description of this credential (default: "")
+    """
+    try:
+        # Validate that inputs is a proper JSON string
+        json.loads(inputs)
+    except json.JSONDecodeError:
+        return json.dumps({"status": "error", "message": "Invalid JSON in inputs"})
+    
+    # Validate that only one of organization, user, or team is provided
+    owner_fields = [organization, user, team]
+    provided_owners = [field for field in owner_fields if field is not None]
+    if len(provided_owners) > 1:
+        return json.dumps({"status": "error", "message": "Only one of organization, user, or team can be provided"})
+    
+    with get_ansible_client() as client:
+        data = {
+            "name": name,
+            "credential_type": credential_type,
+            "inputs": json.loads(inputs),
+            "description": description
+        }
+        
+        # Add owner field if provided
+        if organization is not None:
+            data["organization"] = organization
+        elif user is not None:
+            data["user"] = user
+        elif team is not None:
+            data["team"] = team
+            
+        response = client.request("POST", "/api/v2/credentials/", data=data)
+        return json.dumps(response, indent=2)
+
+@function_tool
+def update_credential(
+    credential_id: int,
+    name: str = None,
+    credential_type: int = None,
+    inputs: str = None,
+    organization: int = None,
+    description: str = None
+) -> str:
+    """Update an existing credential.
+    
+    Args:
+        credential_id: ID of the credential to update (required)
+        name: Name of this credential
+        credential_type: Specify the type of credential
+        inputs: Enter inputs using JSON syntax
+        organization: Organization ID for permissions
+        description: Optional description of this credential
+    """
+    if inputs:
+        try:
+            # Validate that inputs is a proper JSON string
+            json.loads(inputs)
+        except json.JSONDecodeError:
+            return json.dumps({"status": "error", "message": "Invalid JSON in inputs"})
+    
+    with get_ansible_client() as client:
+        data = {}
+        
+        # Add fields that are provided
+        if name is not None:
+            data["name"] = name
+        if credential_type is not None:
+            data["credential_type"] = credential_type
+        if inputs is not None:
+            data["inputs"] = json.loads(inputs)
+        if organization is not None:
+            data["organization"] = organization
+        if description is not None:
+            data["description"] = description
+            
+        # If no data to update, return error
+        if not data:
+            return json.dumps({"status": "error", "message": "No fields provided for update"})
+            
+        response = client.request("PATCH", f"/api/v2/credentials/{credential_id}/", data=data)
+        return json.dumps(response, indent=2)
+
 # Function Tools - User Management
 
 @function_tool

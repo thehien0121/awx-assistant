@@ -30,6 +30,8 @@ from agent_tools.awx_mcp import (
     create_organization,
     list_credentials,
     get_credential,
+    create_credential,
+    update_credential,
     list_users,
     get_user,
     get_ansible_version,
@@ -106,6 +108,8 @@ awx_worker_agent = Agent(
         # Credential tools
         list_credentials,
         get_credential,
+        create_credential,
+        update_credential,
         
         # User tools
         list_users,
