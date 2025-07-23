@@ -32,16 +32,44 @@ the_security_agent = Agent(
     - System and server configuration, Linux/Unix commands, infrastructure best practices.
     - Technical troubleshooting, scripting, CI/CD, cloud, DevOps pipelines, and related tools.
 
+    **Very important:**  
+    - If the user's message does not explicitly mention AWX/Ansible or technical terms, but is part of an ongoing technical conversation (e.g., follow-up questions, clarifications, requests for more detail), you must allow it as valid.  
+    - Examples: "thông tin đâu?", "còn nữa không?", "show more", "tiếp tục đi", "what else?", etc. – these are valid if they follow a technical question or answer about AWX/Ansible.
+
     Reject or redirect questions that are:
     - Not technical in nature.
     - Unrelated to IT, automation, DevOps, or system administration.
     - About celebrities, sports, entertainment, personal life, or unrelated knowledge.
 
     For rejected questions, politely inform the user that the assistant only supports technical topics related to Ansible, AWX, and system operations.
+    
+    Example valid sequences:
+    User: Cho tôi xem thông tin job template
+    Assistant: Dưới đây là thông tin...
+    User: thông tin đâu?
+    => This follow-up is valid because it follows a technical conversation.
+
+    Example invalid:
+    User: Bạn thích ăn gì?
+    => This is invalid.
     """,
     output_type=SecurityRequestCheck,
     model=os.getenv("AI_MODEL"),
 )
+
+def build_context(messages, n=4):
+    if len(messages) < n:
+        n = len(messages)
+    # Get the last n messages (or all if less than n)
+    selected = messages[-n:]
+    chat = ""
+    for m in selected:
+        if m["role"] == "user":
+            chat += f"User: {m['content']}\n"
+        else:
+            chat += f"Assistant: {m['content']}\n"
+    return chat.strip()
+
 
 # 3. Implement the guardrail function.
 # This function is decorated with @input_guardrail and will be attached to our main agent.
@@ -50,58 +78,25 @@ async def security_request_guardrail(
     ctx: RunContextWrapper[None], agent: Agent, input: str | list[TResponseInputItem]
 ) -> GuardrailFunctionOutput:
     """
-    This guardrail checks if a user's request is related to Ansible and related server knowledge.
+    Guardrail checks context, not just last message.
     """
-    conversation_message = ""
-    
-    try:
-        # Safely check for bot message (second to last item)
-        if isinstance(input, list) and len(input) >= 2 and isinstance(input[-2], dict):
-            bot_content = input[-2].get("content", "")
-            if bot_content:
-                conversation_message += "Bot: " + bot_content + "\n"
-        
-        # Safely check for user message (last item)
-        if isinstance(input, list) and input and isinstance(input[-1], dict):
-            user_content = input[-1].get("content", "")
-            if user_content:
-                conversation_message += "User: " + user_content
-        
-        # If no conversation message was built, try to extract from string input
-        if not conversation_message and isinstance(input, str):
-            conversation_message = input
-        elif not conversation_message and isinstance(input, list):
-            # Fallback: try to extract any content from the list
-            for item in input:
-                if isinstance(item, dict) and item.get("content"):
-                    conversation_message += item.get("content", "") + " "
-        
-        # Ensure we have some content to check
+    # If input is a list of messages (OpenAI/chatgpt format)
+    if isinstance(input, list) and all(isinstance(m, dict) and "role" in m for m in input):
+        # Wrap the list of messages into a conversation format, get the last 4-6 messages
+        conversation_message = build_context(input, n=6)
+    else:
+        # If input is a string, send it as is
+        conversation_message = str(input)
         if not conversation_message.strip():
             conversation_message = "User: Hello"
-            
-    except Exception as e:
-        print(f"[GUARDRAIL] Error processing input: {e}")
-        # Default to allowing the request if we can't process it
-        return GuardrailFunctionOutput(
-            output_info=SecurityRequestCheck(
-                is_valid_request=True,
-                reasoning="Unable to process input, defaulting to allow"
-            ),
-            tripwire_triggered=False,
-        )
     
-    # Run the checker agent on the user's full instruction.
+    # Run guardrail agent on the entire conversation
     result = await Runner.run(the_security_agent, conversation_message, context=ctx.context)
     check_result = result.final_output_as(SecurityRequestCheck)
-    
-    # Log the guardrail check result
+
     print(f"[GUARDRAIL] Request check result: valid={check_result.is_valid_request}, reason={check_result.reasoning}")
 
-    # The "tripwire" is triggered if the request is NOT valid.
-    # This will stop the main agent from running and raise an exception.
     tripwire_triggered = not check_result.is_valid_request
-
     return GuardrailFunctionOutput(
         output_info=check_result,
         tripwire_triggered=tripwire_triggered,

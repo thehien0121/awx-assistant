@@ -2,152 +2,38 @@ import os
 from agents import Agent
 from pydantic import BaseModel, Field
 
-# Import the tools
+# Import the function tools from the updated awx_mcp.py
 from agent_tools.awx_mcp import (
-    # Core Inventory functions
     list_inventories,
     get_inventory,
     create_inventory,
     update_inventory,
     delete_inventory,
-    # Inventory Sources
-    list_inventory_sources,
-    get_inventory_source,
-    create_inventory_source,
-    update_inventory_source,
-    delete_inventory_source,
-    sync_inventory_source,
-    # Inventory Updates
-    list_inventory_updates,
-    create_inventory_update,
-    get_inventory_update,
-    update_inventory_update,
-    delete_inventory_update,
-    # Hosts and Groups
     list_hosts,
     create_host,
     get_host,
     update_host,
     delete_host,
-    list_groups,
-    create_group,
-    get_group,
-    update_group,
-    delete_group,
-    # Core Job functions
-    list_jobs,
-    get_job,
-    create_job,
-    update_job,
-    delete_job,
-    job_status,
-    job_logs,
-    run_job,
-    list_recent_jobs,
-    # Job Templates
     list_job_templates,
     get_job_template,
     create_job_template,
-    update_job_template,
-    delete_job_template,
-    # System Jobs
-    list_system_jobs,
-    get_system_job,
-    delete_system_job,
-    list_system_job_templates,
-    create_system_job_template,
-    get_system_job_template,
-    update_system_job_template,
-    delete_system_job_template,
-    # Ad Hoc Commands
-    list_ad_hoc_commands,
-    create_ad_hoc_command,
-    get_ad_hoc_command,
-    update_ad_hoc_command,
-    delete_ad_hoc_command,
-    # Core Project functions
+    launch_job,
+    list_jobs,
+    get_job,
+    cancel_job,
+    get_job_stdout,
     list_projects,
     get_project,
     create_project,
-    update_project,
-    delete_project,
-    # Organizations
     list_organizations,
     get_organization,
     create_organization,
-    update_organization,
-    delete_organization,
-    # Credentials
     list_credentials,
     get_credential,
-    create_credential,
-    update_credential,
-    delete_credential,
-    # Users
     list_users,
     get_user,
-    create_user,
-    update_user,
-    delete_user,
-    # Workflow Job Templates (Core only)
-    list_workflow_job_templates,
-    get_workflow_job_template,
-    create_workflow_job_template,
-    update_workflow_job_template,
-    delete_workflow_job_template,
-    launch_workflow_job_template,
-    # Workflow Jobs (Core only)
-    list_workflow_jobs,
-    get_workflow_job,
-    create_workflow_job,
-    update_workflow_job,
-    delete_workflow_job,
-    cancel_workflow_job,
-    relaunch_workflow_job,
-    # Workflow Approvals (Core only)
-    list_workflow_approval_templates,
-    create_workflow_approval_template,
-    get_workflow_approval_template,
-    update_workflow_approval_template,
-    delete_workflow_approval_template,
-    list_workflow_approvals,
-    get_workflow_approval,
-    approve_workflow_approval,
-    deny_workflow_approval,
-    # Schedules
-    list_schedules,
-    create_schedule,
-    get_schedule,
-    update_schedule,
-    delete_schedule,
-    get_schedule_jobs,
-    get_schedule_next_run,
-    # Roles
-    list_roles,
-    get_role,
-    list_role_children,
-    list_role_parents,
-    list_role_teams,
-    list_role_users,
-    # Instances
-    list_instances,
-    create_instance,
-    get_instance,
-    update_instance,
-    delete_instance,
-    get_instance_health_check,
-    initiate_instance_health_check,
-    get_instance_install_bundle,
-    list_instance_jobs,
-    list_instance_peers,
-    # Instance Groups
-    list_instance_groups,
-    create_instance_group,
-    get_instance_group,
-    update_instance_group,
-    delete_instance_group,
-    get_instance_group_instances,
-    add_instance_to_group
+    get_ansible_version,
+    get_dashboard_stats
 )
 
 class awx_worker_output(BaseModel):
@@ -164,150 +50,69 @@ class awx_worker_output(BaseModel):
         description="The name of the tool that was used to perform the action."
     )
     
-# 1. Define the instructions for the new agent.
-# It's crucial to tell the agent to use the tools available to it.
+# Define the instructions for the AWX worker agent
 awx_worker_instructions = """
-You are a technical operations agent specialized in interacting with the AWX system via its API (api/v2). 
+You are a technical operations agent specialized in interacting with the Ansible AWX system via its API (api/v2). 
 Your primary responsibility is to accurately execute user requests that involve performing operations, retrieving information, or making changes in AWX, as directed by the leader agent. 
 Always ensure safe, secure, and efficient execution of tasks, and return structured, actionable results. 
-If a user’s request is outside the scope of direct AWX operations or requires broader explanation, notify the leader agent so it can be delegated to the appropriate agent.
+If a user's request is outside the scope of direct AWX operations or requires broader explanation, notify the leader agent so it can be delegated to the appropriate agent.
 ### IMPORTANT: Your final output must be the result and the explanation of the function calling, wrapped in a structured `awx_worker_output` format.
 """
 
-# 3. Create the new agent instance.
-# We attach the MCP server to this agent via the `mcp_servers` list.
+# Create the AWX worker agent instance
 awx_worker_agent = Agent(
     name="AWX Worker Agent",
     instructions=awx_worker_instructions,
-    # This agent will output the same format as our main design agent.
     output_type=awx_worker_output,
     model=os.getenv("AI_MODEL"),
     handoff_description="Use this agent when the user wants to perform operations on AWX.",
     tools=[
+        # Inventory tools
         list_inventories,
         get_inventory,
         create_inventory,
         update_inventory,
         delete_inventory,
-        list_inventory_sources,
-        get_inventory_source,
-        create_inventory_source,
-        update_inventory_source,
-        delete_inventory_source,
-        sync_inventory_source,
-        list_inventory_updates,
-        create_inventory_update,
-        get_inventory_update,
-        update_inventory_update,
-        delete_inventory_update,
+        
+        # Host tools
         list_hosts,
         create_host,
         get_host,
         update_host,
         delete_host,
-        list_groups,
-        create_group,
-        get_group,
-        update_group,
-        delete_group,
-        list_jobs,
-        get_job,
-        create_job,
-        update_job,
-        delete_job,
-        job_status,
-        job_logs,
-        run_job,
-        list_recent_jobs,
+        
+        # Job Template tools
         list_job_templates,
         get_job_template,
         create_job_template,
-        update_job_template,
-        delete_job_template,
-        list_system_jobs,
-        get_system_job,
-        delete_system_job,
-        list_system_job_templates,
-        create_system_job_template,
-        get_system_job_template,
-        update_system_job_template,
-        delete_system_job_template,
-        list_ad_hoc_commands,
-        create_ad_hoc_command,
-        get_ad_hoc_command,
-        update_ad_hoc_command,
-        delete_ad_hoc_command,
+        launch_job,
+        
+        # Job tools
+        list_jobs,
+        get_job,
+        cancel_job,
+        get_job_stdout,
+        
+        # Project tools
         list_projects,
         get_project,
         create_project,
-        update_project,
-        delete_project,
+        
+        # Organization tools
         list_organizations,
         get_organization,
         create_organization,
-        update_organization,
-        delete_organization,
+        
+        # Credential tools
         list_credentials,
         get_credential,
-        create_credential,
-        update_credential,
-        delete_credential,
+        
+        # User tools
         list_users,
         get_user,
-        create_user,
-        update_user,
-        delete_user,
-        list_workflow_job_templates,
-        get_workflow_job_template,
-        create_workflow_job_template,
-        update_workflow_job_template,
-        delete_workflow_job_template,
-        launch_workflow_job_template,
-        list_workflow_jobs,
-        get_workflow_job,
-        create_workflow_job,
-        update_workflow_job,
-        delete_workflow_job,
-        cancel_workflow_job,
-        relaunch_workflow_job,
-        list_workflow_approval_templates,
-        create_workflow_approval_template,
-        get_workflow_approval_template,
-        update_workflow_approval_template,
-        delete_workflow_approval_template,
-        list_workflow_approvals,
-        get_workflow_approval,
-        approve_workflow_approval,
-        deny_workflow_approval,
-        list_schedules,
-        create_schedule,
-        get_schedule,
-        update_schedule,
-        delete_schedule,
-        get_schedule_jobs,
-        get_schedule_next_run,
-        list_roles,
-        get_role,
-        list_role_children,
-        list_role_parents,
-        list_role_teams,
-        list_role_users,
-        list_instances,
-        create_instance,
-        get_instance,
-        update_instance,
-        delete_instance,
-        get_instance_health_check,
-        initiate_instance_health_check,
-        get_instance_install_bundle,
-        list_instance_jobs,
-        list_instance_peers,
-        list_instance_groups,
-        create_instance_group,
-        get_instance_group,
-        update_instance_group,
-        delete_instance_group,
-        get_instance_group_instances,
-        add_instance_to_group
+        
+        # System tools
+        get_ansible_version,
+        get_dashboard_stats
     ]
 ) 
