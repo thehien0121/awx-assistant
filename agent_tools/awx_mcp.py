@@ -643,10 +643,10 @@ def get_credential(credential_id: int) -> str:
 def create_credential(
     name: str,
     credential_type: int,
-    inputs: str = "{}",
+    inputs: dict = {},
     organization: int = None,
-    user: int = None,
-    team: int = None,
+    user: Optional[int] = None,
+    team: Optional[int] = None,
     description: str = ""
 ) -> str:
     """Create a new credential.
@@ -654,15 +654,33 @@ def create_credential(
     Args:
         name: Name of this credential (required)
         credential_type: Specify the type of credential you want to create (required)
-        inputs: Enter inputs using JSON syntax (default: {})
+        inputs: Enter inputs using JSON syntax
         organization: Inherit permissions from organization roles (default: None)
         user: Write-only field used to add user to owner role (default: None)
         team: Write-only field used to add team to owner role (default: None)
         description: Optional description of this credential (default: "")
+    Example:
+        {
+            "credential_type": 1,
+            "inputs": {
+                "password": "secret",
+                "username": "joe"
+            },
+            "name": "Best credential ever",
+            "organization": 1
+        }
     """
     try:
         # Validate that inputs is a proper JSON string
-        json.loads(inputs)
+        if isinstance(inputs, str):
+            try:
+                inputs = json.loads(inputs)
+            except Exception:
+                return json.dumps({"status": "error", "message": "Invalid JSON in inputs"})
+        elif isinstance(inputs, dict):
+            inputs = inputs
+        else:
+            return json.dumps({"status": "error", "message": "inputs must be dict or JSON string"})
     except json.JSONDecodeError:
         return json.dumps({"status": "error", "message": "Invalid JSON in inputs"})
     
@@ -676,7 +694,7 @@ def create_credential(
         data = {
             "name": name,
             "credential_type": credential_type,
-            "inputs": json.loads(inputs),
+            "inputs": inputs,
             "description": description
         }
         
@@ -696,7 +714,7 @@ def update_credential(
     credential_id: int,
     name: str = None,
     credential_type: int = None,
-    inputs: str = None,
+    inputs: dict = {},
     organization: int = None,
     description: str = None
 ) -> str:
@@ -709,11 +727,30 @@ def update_credential(
         inputs: Enter inputs using JSON syntax
         organization: Organization ID for permissions
         description: Optional description of this credential
+    Example:
+        {
+            "credential_type": 1,
+            "inputs": {
+                "ssh_key_data": "$encrypted$",
+                "ssh_key_unlock": "new-unlock",
+                "username": "joe"
+            },
+            "name": "Best credential ever",
+            "organization": 1
+        }
     """
     if inputs:
         try:
             # Validate that inputs is a proper JSON string
-            json.loads(inputs)
+            if isinstance(inputs, str):
+                try:
+                    inputs = json.loads(inputs)
+                except Exception:
+                    return json.dumps({"status": "error", "message": "Invalid JSON in inputs"})
+            elif isinstance(inputs, dict):
+                inputs = inputs
+            else:
+                return json.dumps({"status": "error", "message": "inputs must be dict or JSON string"})
         except json.JSONDecodeError:
             return json.dumps({"status": "error", "message": "Invalid JSON in inputs"})
     
@@ -726,7 +763,7 @@ def update_credential(
         if credential_type is not None:
             data["credential_type"] = credential_type
         if inputs is not None:
-            data["inputs"] = json.loads(inputs)
+            data["inputs"] = inputs
         if organization is not None:
             data["organization"] = organization
         if description is not None:
@@ -779,4 +816,4 @@ def get_dashboard_stats() -> str:
     """Get dashboard statistics."""
     with get_ansible_client() as client:
         stats = client.request("GET", "/api/v2/dashboard/")
-        return json.dumps(stats, indent=2) 
+        return json.dumps(stats, indent=2)

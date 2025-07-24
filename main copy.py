@@ -14,13 +14,15 @@ import logfire
 import redis
 import json
 
-
 # --- Load Environment Variables ---
+# Make sure you have a .env file with your AI_MODEL and other credentials
 dotenv_file = Path(__file__).parent / ".env"
 print("DEBUG load_dotenv file:", dotenv_file)
 load_dotenv(dotenv_file)
 
 # --- Redis Client Initialization ---
+# Assumes Redis is running on the default host and port.
+# decode_responses=True ensures that Redis returns strings, not bytes.
 redis_client = redis.Redis(
     host=os.getenv("REDIS_HOST"),
     port=int(os.getenv("REDIS_PORT", 6379)),      # ép int và default nếu thiếu
@@ -29,37 +31,44 @@ redis_client = redis.Redis(
 )
 
 # --- SDK Configuration for Non-OpenAI Providers ---
+# These settings are based on the official documentation for using custom model providers.
+# See: https://openai.github.io/openai-agents-python/models/#common-issues-with-using-other-llm-providers
 from agents import (
     Agent,
     Runner,
+    RunResult,
+    RunResultStreaming,
     InputGuardrailTripwireTriggered,
     set_tracing_disabled, 
-    set_default_openai_api,
-    set_default_openai_client   
+    set_default_openai_api   
 )
-try:
-    from openai import AsyncAzureOpenAI
-    client = AsyncAzureOpenAI(
-        api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
-        azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
-        api_key=os.getenv("AZURE_OPENAI_API_KEY"),
-        azure_deployment=os.getenv("AZURE_OPENAI_DEPLOYMENT"),
-    )
-    set_default_openai_client(client, use_for_tracing=False)
-    print("AZURE OpenAI client set up successfully")
-except Exception as e:
-    print(f"Error setting up AZURE OpenAI client: {e}")
-    raise e
 
+# 1. Disable tracing to prevent 401 Unauthorized errors when not using an OpenAI API key.
+# The SDK attempts to send trace data to OpenAI servers by default.
 set_tracing_disabled(True)
+
+# 2. Set the default API to 'chat_completions'.
+# Most providers, including OpenRouter, use the Chat Completions API format.
+# The SDK defaults to the 'responses' API, which can cause 404 errors.
 set_default_openai_api("chat_completions")
 
+# --- Core Agent Imports ---
+from agents import Agent, Runner 
 
 # --- Import Specialist Agents & Data Models ---
-# --- Import Guardrails ---
-from sub_agents.chat_guardrails import security_request_guardrail
+# These are the specialized agents and their expected output formats (Pydantic models)
 from sub_agents.chat_agent import chat_agent
 from sub_agents.awx_worker import awx_worker_agent
+
+# --- Import Guardrails ---
+from sub_agents.chat_guardrails import security_request_guardrail
+
+socket_request_type = {
+    "chat": "awx-chat",
+    "chat_token": "awx-chat-token",
+    "chat_history": "conversation-history",
+    "error": "error",
+}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -180,67 +189,6 @@ def save_history(user_id: str, new_history: List[Dict]):
     except (redis.RedisError, json.JSONDecodeError) as e:
         print(f"Error saving history to Redis: {e}")
 
-
-# ==========================================================
-# --- WebSocket Connection Management ---
-# This dictionary will hold active connections, allowing us to manage them if needed.
-# ==========================================================
-active_connections: Dict[str, WebSocket] = {}
-socket_request_type = {
-    "chat": "awx-chat",
-    "chat_token": "awx-chat-token",
-    "chat_history": "conversation-history",
-    "error": "error",
-}
-@app.websocket("/ws/{user_id}")
-async def websocket_endpoint(websocket: WebSocket, user_id: str):
-    """
-    This is the main WebSocket endpoint for handling all real-time chat interactions.
-    It maintains a stateful connection for each user/project session.
-    It acts as a dispatcher, routing requests to the appropriate handler based on the 'request_type' parameter.
-    """
-    connection_id = f"{user_id}"
-    await websocket.accept()
-    active_connections[connection_id] = websocket
-    print(f"WebSocket connection established for: {connection_id}")
-
-    try:
-        while True:
-            # 1. Wait for a new message from the client and determine the target request_type.
-            print("\n" + "="*50)
-            print("[WORKFLOW] Waiting for message from client...")
-            data = await websocket.receive_json()
-            # Inject user/project ids for the handlers to use
-            data['user_id'] = user_id
-            # print(f"[WORKFLOW] Received data: {data}")
-
-            request_type = data.get("request_type", socket_request_type["chat"])
-
-            # 2. Get history from Redis. This is now the source of truth for conversation state.
-            history = get_history(user_id)
-            # 3. Dispatch the request to the correct handler based on the request_type.
-            if request_type == socket_request_type["chat_history"]:
-                print(f"[WORKFLOW] Sending conversation history to client")
-                await websocket.send_json({"request_type": socket_request_type["chat_history"], "content": history})
-            elif request_type == socket_request_type["chat"]: 
-                await handle_awx_chat(websocket, data, history)
-            else:
-                # Placeholder for other request_types you will add.
-                print(f"[WORKFLOW] [ERROR] Unknown request_type: '{request_type}'")
-                await websocket.send_json({"request_type": socket_request_type["error"], "content": f"Unknown request_type received: {request_type}"})
-                continue # Wait for the next message
-
-    except WebSocketDisconnect:
-        print(f"WebSocket connection closed for: {connection_id}")
-    except Exception as e:
-        print(f"!!! [ERROR] An unexpected error occurred for {connection_id}: {e}")
-        traceback.print_exc()
-        await websocket.send_json({"request_type": socket_request_type["error"], "content": str(e)})
-    finally:
-        if connection_id in active_connections:
-            del active_connections[connection_id]
-
-
 # ==========================================================
 # AWX Chat Module Handler
 # ==========================================================
@@ -351,6 +299,60 @@ async def health_check():
             "timestamp": str(datetime.datetime.now()),
             "error": str(e)
         }
+
+# ==========================================================
+# --- WebSocket Connection Management ---
+# This dictionary will hold active connections, allowing us to manage them if needed.
+# ==========================================================
+active_connections: Dict[str, WebSocket] = {}
+
+@app.websocket("/ws/{user_id}")
+async def websocket_endpoint(websocket: WebSocket, user_id: str):
+    """
+    This is the main WebSocket endpoint for handling all real-time chat interactions.
+    It maintains a stateful connection for each user/project session.
+    It acts as a dispatcher, routing requests to the appropriate handler based on the 'request_type' parameter.
+    """
+    connection_id = f"{user_id}"
+    await websocket.accept()
+    active_connections[connection_id] = websocket
+    print(f"WebSocket connection established for: {connection_id}")
+
+    try:
+        while True:
+            # 1. Wait for a new message from the client and determine the target request_type.
+            print("\n" + "="*50)
+            print("[WORKFLOW] Waiting for message from client...")
+            data = await websocket.receive_json()
+            # Inject user/project ids for the handlers to use
+            data['user_id'] = user_id
+            # print(f"[WORKFLOW] Received data: {data}")
+
+            request_type = data.get("request_type", socket_request_type["chat"])
+
+            # 2. Get history from Redis. This is now the source of truth for conversation state.
+            history = get_history(user_id)
+            # 3. Dispatch the request to the correct handler based on the request_type.
+            if request_type == socket_request_type["chat_history"]:
+                print(f"[WORKFLOW] Sending conversation history to client")
+                await websocket.send_json({"request_type": socket_request_type["chat_history"], "content": history})
+            elif request_type == socket_request_type["chat"]: 
+                await handle_awx_chat(websocket, data, history)
+            else:
+                # Placeholder for other request_types you will add.
+                print(f"[WORKFLOW] [ERROR] Unknown request_type: '{request_type}'")
+                await websocket.send_json({"request_type": socket_request_type["error"], "content": f"Unknown request_type received: {request_type}"})
+                continue # Wait for the next message
+
+    except WebSocketDisconnect:
+        print(f"WebSocket connection closed for: {connection_id}")
+    except Exception as e:
+        print(f"!!! [ERROR] An unexpected error occurred for {connection_id}: {e}")
+        traceback.print_exc()
+        await websocket.send_json({"request_type": socket_request_type["error"], "content": str(e)})
+    finally:
+        if connection_id in active_connections:
+            del active_connections[connection_id]
 
 
 # --- Uvicorn Server Runner ---
