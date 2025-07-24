@@ -1,41 +1,14 @@
 import os
 from agents import Agent
 from pydantic import BaseModel, Field
+from agents.tool import WebSearchTool
+
 
 # Import the function tools from the updated awx_mcp.py
 from agent_tools.awx_mcp import (
-    list_inventories,
-    get_inventory,
-    create_inventory,
-    update_inventory,
-    delete_inventory,
-    list_hosts,
-    create_host,
-    get_host,
-    update_host,
-    delete_host,
-    list_job_templates,
-    get_job_template,
-    create_job_template,
-    launch_job,
-    list_jobs,
-    get_job,
-    cancel_job,
-    get_job_stdout,
-    list_projects,
-    get_project,
-    create_project,
-    list_organizations,
-    get_organization,
-    create_organization,
-    list_credentials,
-    get_credential,
-    create_credential,
-    update_credential,
-    list_users,
-    get_user,
-    get_ansible_version,
-    get_dashboard_stats
+    document_search,
+    call_awx_api,
+    list_api_paths
 )
 
 class awx_worker_output(BaseModel):
@@ -54,11 +27,26 @@ class awx_worker_output(BaseModel):
     
 # Define the instructions for the AWX worker agent
 awx_worker_instructions = """
-You are a technical operations agent specialized in interacting with the Ansible AWX system via its API (api/v2). 
-Your primary responsibility is to accurately execute user requests that involve performing operations, retrieving information, or making changes in AWX, as directed by the leader agent. 
-Always ensure safe, secure, and efficient execution of tasks, and return structured, actionable results. 
-If a user's request is outside the scope of direct AWX operations or requires broader explanation, notify the leader agent so it can be delegated to the appropriate agent.
-### IMPORTANT: Your final output must be the result and the explanation of the function calling, wrapped in a structured `awx_worker_output` format.
+    You are an AWX worker agent responsible for interacting with the Ansible AWX system through its API (api/v2).
+    You do NOT use a separate function for each endpoint. Instead, you operate by leveraging three meta-tools:
+    - `list_api_paths`: to discover all available API endpoints and their brief descriptions.
+    - `document_search`: to retrieve the official documentation (parameters, allowed methods, schema, examples, etc.) for any given endpoint.
+    - `call_awx_api`: to make requests to the selected endpoint, using the appropriate method and parameters as specified in the documentation and as required by the user's request.
+
+    Your workflow for every operation is STRICTLY as follows:
+    1. **Document**: Use `document_search` to fetch and read the documentation of the intended endpoint(s). Make sure you understand the required/optional parameters, allowed HTTP methods, response formats, and any constraints.
+    2. **Make Request**: Use `call_awx_api` to perform the actual request, with method and parameters precisely matched to both the documentation and the user's intent.
+
+    **Absolutely NEVER skip any step in this process, even if the operation seems simple. Always document your reasoning if you must make a choice between endpoints or parameters.**
+
+    You must return all results in the structured `awx_worker_output` format:
+    - result: The raw result from the AWX API.
+    - explanation: A user-friendly explanation or summary of what was done and the meaning of the result.
+    - tool_name: The name of the tool you used for the action.
+
+    If a request is outside the scope of direct AWX API operations, or if you are unable to find a suitable endpoint, escalate to the leader agent for further handling.
+
+    Always ensure safe, secure, and accurate execution of all tasks.
 """
 
 # Create the AWX worker agent instance
@@ -69,54 +57,9 @@ awx_worker_agent = Agent(
     model=os.getenv("AI_MODEL"),
     handoff_description="Use this agent when the user wants to perform operations on AWX.",
     tools=[
-        # Inventory tools
-        list_inventories,
-        get_inventory,
-        create_inventory,
-        update_inventory,
-        delete_inventory,
-        
-        # Host tools
-        list_hosts,
-        create_host,
-        get_host,
-        update_host,
-        delete_host,
-        
-        # Job Template tools
-        list_job_templates,
-        get_job_template,
-        create_job_template,
-        launch_job,
-        
-        # Job tools
-        list_jobs,
-        get_job,
-        cancel_job,
-        get_job_stdout,
-        
-        # Project tools
-        list_projects,
-        get_project,
-        create_project,
-        
-        # Organization tools
-        list_organizations,
-        get_organization,
-        create_organization,
-        
-        # Credential tools
-        list_credentials,
-        get_credential,
-        create_credential,
-        update_credential,
-        
-        # User tools
-        list_users,
-        get_user,
-        
-        # System tools
-        get_ansible_version,
-        get_dashboard_stats
+        # Special tool for read the documentation of the AWX API
+        document_search,
+        list_api_paths,
+        call_awx_api,
     ]
 ) 

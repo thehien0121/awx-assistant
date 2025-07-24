@@ -109,7 +109,14 @@ class AnsibleClient:
         return headers
     
     def request(self, method: str, endpoint: str, params: Dict = None, data: Dict = None) -> Dict:
-        """Make a request to the Ansible API."""
+        """
+        Make a request to the Ansible API.
+        Args:
+            method: The HTTP method to use (GET, POST, PUT, PATCH, DELETE)
+            endpoint: The API endpoint to request (e.g. /api/v2/inventories/)
+            params: The query parameters to include in the request (e.g. {"page_size": 100, "page": 1})
+            data: The JSON data to include in the request (e.g. {"name": "test", "description": "test"})
+        """
         url = urljoin(self.base_url, endpoint)
         headers = self.get_headers()
         
@@ -170,6 +177,104 @@ def handle_pagination(client: AnsibleClient, endpoint: str, params: Dict = None)
             params = None
             
     return results
+
+# Special tool for read the documentation of the AWX API
+@function_tool
+def list_api_paths() -> str:
+    """
+    List all API paths of the current AWX API.
+    """
+    client = get_ansible_client()
+    resp = requests.get(client.base_url+"/api/v2/", headers=client.get_headers())
+    return resp.text
+
+@function_tool
+def document_search(url: str) -> str:
+    """
+    Search the documentation of the AWX API.
+    Current Endpoints: 
+        "ping": "/api/v2/ping/",
+        "instances": "/api/v2/instances/",
+        "instance_groups": "/api/v2/instance_groups/",
+        "receptor_addresses": "/api/v2/receptor_addresses/",
+        "config": "/api/v2/config/",
+        "settings": "/api/v2/settings/",
+        "me": "/api/v2/me/",
+        "dashboard": "/api/v2/dashboard/",
+        "organizations": "/api/v2/organizations/",
+        "users": "/api/v2/users/",
+        "execution_environments": "/api/v2/execution_environments/",
+        "projects": "/api/v2/projects/",
+        "project_updates": "/api/v2/project_updates/",
+        "teams": "/api/v2/teams/",
+        "credentials": "/api/v2/credentials/",
+        "credential_types": "/api/v2/credential_types/",
+        "credential_input_sources": "/api/v2/credential_input_sources/",
+        "applications": "/api/v2/applications/",
+        "tokens": "/api/v2/tokens/",
+        "metrics": "/api/v2/metrics/",
+        "inventory": "/api/v2/inventories/",
+        "constructed_inventory": "/api/v2/constructed_inventories/",
+        "inventory_sources": "/api/v2/inventory_sources/",
+        "inventory_updates": "/api/v2/inventory_updates/",
+        "groups": "/api/v2/groups/",
+        "hosts": "/api/v2/hosts/",
+        "host_metrics": "/api/v2/host_metrics/",
+        "host_metric_summary_monthly": "/api/v2/host_metric_summary_monthly/",
+        "job_templates": "/api/v2/job_templates/",
+        "jobs": "/api/v2/jobs/",
+        "ad_hoc_commands": "/api/v2/ad_hoc_commands/",
+        "system_job_templates": "/api/v2/system_job_templates/",
+        "system_jobs": "/api/v2/system_jobs/",
+        "schedules": "/api/v2/schedules/",
+        "roles": "/api/v2/roles/",
+        "notification_templates": "/api/v2/notification_templates/",
+        "notifications": "/api/v2/notifications/",
+        "labels": "/api/v2/labels/",
+        "unified_job_templates": "/api/v2/unified_job_templates/",
+        "unified_jobs": "/api/v2/unified_jobs/",
+        "activity_stream": "/api/v2/activity_stream/",
+        "workflow_job_templates": "/api/v2/workflow_job_templates/",
+        "workflow_jobs": "/api/v2/workflow_jobs/",
+        "workflow_approvals": "/api/v2/workflow_approvals/",
+        "workflow_job_template_nodes": "/api/v2/workflow_job_template_nodes/",
+        "workflow_job_nodes": "/api/v2/workflow_job_nodes/",
+        "mesh_visualizer": "/api/v2/mesh_visualizer/",
+        "bulk": "/api/v2/bulk/",
+        "analytics": "/api/v2/analytics/",
+        "service_index": "/api/v2/service-index/",
+        "role_definitions": "/api/v2/role_definitions/",
+        "role_user_assignments": "/api/v2/role_user_assignments/",
+        "role_team_assignments": "/api/v2/role_team_assignments/"
+        
+    Args:
+        url: {ANSIBLE_BASE_URL} the API path of the tool you gonna use (e.g. /api/v2/inventories/)
+    """
+    client = get_ansible_client()
+    resp = requests.options(client.base_url + url, headers=client.get_headers())
+    return resp.text
+
+@function_tool
+def call_awx_api(method: str, endpoint: str, params: Dict = None, data: Dict = None) -> str:
+    """
+    Call the AWX API.
+    Args:
+        method: HTTP method (GET, POST, PUT, PATCH, DELETE)
+        endpoint: API endpoint (e.g. /api/v2/projects/)
+        params: query params (dict)
+        data: request body (dict)
+    IMPORTANT - OBLIGATORY:
+        Only 'method', 'endpoint', 'params', 'data' are allowed as top-level keys.
+        All other fields will be automatically moved to 'data'.
+    Example:
+        method: GET
+        endpoint: /api/v2/projects/
+        params: {"page_size": 100, "page": 1}
+        data: {"name": "test", "description": "test"}
+    """
+    client = get_ansible_client()
+    return client.request(method, endpoint, params=params, data=data)
+    
 
 # Function Tools - Inventory Management
 
@@ -817,3 +922,4 @@ def get_dashboard_stats() -> str:
     with get_ansible_client() as client:
         stats = client.request("GET", "/api/v2/dashboard/")
         return json.dumps(stats, indent=2)
+    
