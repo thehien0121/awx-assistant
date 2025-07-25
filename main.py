@@ -266,8 +266,8 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
         stream = Runner.run_streamed(the_leader_agent, prompt_input, max_turns=40)
         final_text_content = ""
         async for event in stream.stream_events():
-            if event.type == "raw_response_event" and isinstance(event.data, ChatCompletionChunk):
-                token = event.data.choices[0].delta.content or ""
+            if event.type == "raw_response_event" and hasattr(event.data, 'delta'):
+                token = event.data.delta or ""
                 final_text_content += token
                 await websocket.send_json({"request_type": socket_request_type["chat_token"], "content": token})
             elif event.type == "tool_call_created":
