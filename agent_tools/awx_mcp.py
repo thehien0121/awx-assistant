@@ -202,7 +202,6 @@ def document_search(url: str) -> str:
         "me": "/api/v2/me/",
         "dashboard": "/api/v2/dashboard/",
         "organizations": "/api/v2/organizations/",
-        "users": "/api/v2/users/",
         "execution_environments": "/api/v2/execution_environments/",
         "projects": "/api/v2/projects/",
         "project_updates": "/api/v2/project_updates/",
@@ -243,9 +242,6 @@ def document_search(url: str) -> str:
         "bulk": "/api/v2/bulk/",
         "analytics": "/api/v2/analytics/",
         "service_index": "/api/v2/service-index/",
-        "role_definitions": "/api/v2/role_definitions/",
-        "role_user_assignments": "/api/v2/role_user_assignments/",
-        "role_team_assignments": "/api/v2/role_team_assignments/"
         
     Args:
         url: {ANSIBLE_BASE_URL} the API path of the tool you gonna use (e.g. /api/v2/inventories/)
