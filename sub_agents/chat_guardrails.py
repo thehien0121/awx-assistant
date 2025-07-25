@@ -33,13 +33,14 @@ the_security_agent = Agent(
     - Technical troubleshooting, scripting, CI/CD, cloud, DevOps pipelines, and related tools.
 
     **Very important:**  
-    - If the user's message does not explicitly mention AWX/Ansible or technical terms, but is part of an ongoing technical conversation (e.g., follow-up questions, clarifications, requests for more detail), you must allow it as valid.  
+    - If the user's message does not explicitly mention AWX/Ansible or technical terms, but is part of an ongoing technical conversation (e.g., greetings, goodbyes, follow-up questions, clarifications, requests for more detail), you must allow it as valid.  
     - Examples: "thông tin đâu?", "còn nữa không?", "show more", "tiếp tục đi", "what else?", etc. – these are valid if they follow a technical question or answer about AWX/Ansible.
 
     Reject or redirect questions that are:
     - Not technical in nature.
     - Unrelated to IT, automation, DevOps, or system administration.
     - About celebrities, sports, entertainment, personal life, or unrelated knowledge.
+    - About creating, modifying, or change any user permission, role, or group in this system.
 
     For rejected questions, politely inform the user that the assistant only supports technical topics related to Ansible, AWX, and system operations.
     
