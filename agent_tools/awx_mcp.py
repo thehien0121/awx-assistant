@@ -270,8 +270,8 @@ def check_project_manual_path(type: str, path: str, filename: str = None, conten
         if type == "add":
             if not path or not filename or not content:
                 return json.dumps({"status": False, "message": "Missing required parameters for add operation"})
-            if not filename.endswith(".yml") or not filename.endswith(".yaml"):
-                filename = f"{filename}.yml"
+            if not filename.endswith(".yaml"):
+                filename = f"{filename}.yaml"
             if os.path.exists(project_path):
                 return json.dumps({"status": False, "message": "this path is already exist"})
             
