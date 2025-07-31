@@ -8,7 +8,8 @@ from agents.tool import WebSearchTool
 from agent_tools.awx_mcp import (
     document_search,
     call_awx_api,
-    list_api_paths
+    list_api_paths,
+    check_project_manual_path
 )
 
 class awx_worker_output(BaseModel):
@@ -32,10 +33,16 @@ awx_worker_instructions = """
     - `list_api_paths`: to discover all available API endpoints and their brief descriptions.
     - `document_search`: to retrieve the official documentation (parameters, allowed methods, schema, examples, etc.) for any given endpoint.
     - `call_awx_api`: to make requests to the selected endpoint, using the appropriate method and parameters as specified in the documentation and as required by the user's request.
+    - `check_project_manual_path`: this is only for the project manual path, to check the project manual path.
 
     Your workflow for every operation is STRICTLY as follows:
     1. **Document**: Use `document_search` to fetch and read the documentation of the intended endpoint(s). Make sure you understand the required/optional parameters, allowed HTTP methods, response formats, and any constraints.
-    2. **Make Request**: Use `call_awx_api` to perform the actual request, with method and parameters precisely matched to both the documentation and the user's intent.
+    2. **Pre-request Check**: For endpoints related to projects (/api/v2/projects/), and the scm_type is manual, you MUST:
+       - Ask the user to provide the path of the project, and the filename of the project, and the content of the project. If the user not provide it, do not doing anything.
+       - Call `check_project_manual_path()` first with appropriate parameters:
+       - For POST requests (creating projects): call with type="add", path, filename, and content
+       - For DELETE requests (removing projects): call with type="remove" and path.
+    3. **Make Request**: Use `call_awx_api` to perform the actual request, with method and parameters precisely matched to both the documentation and the user's intent.
 
     **Absolutely NEVER skip any step in this process, even if the operation seems simple. Always document your reasoning if you must make a choice between endpoints or parameters.**
 
@@ -61,5 +68,6 @@ awx_worker_agent = Agent(
         document_search,
         list_api_paths,
         call_awx_api,
+        check_project_manual_path
     ]
 ) 

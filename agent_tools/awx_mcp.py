@@ -11,6 +11,8 @@ from typing import Dict, List, Any, Optional, Union
 from urllib.parse import urljoin
 from dotenv import load_dotenv
 from agents import function_tool
+import shutil
+import traceback
 
 load_dotenv()
 
@@ -249,6 +251,61 @@ def document_search(url: str) -> str:
     client = get_ansible_client()
     resp = requests.options(client.base_url + url, headers=client.get_headers())
     return resp.text
+
+@function_tool
+def check_project_manual_path(type: str, path: str, filename: str = None, content: str = None) -> str:
+    """
+    Check and manage project manual paths.
+    Args:
+        type: Operation type ('add' or 'remove')
+        path: Project path (e.g. 'get_timezone', 'get_status')
+        filename: YAML file name (required for 'add' type)
+        content: YAML file content (required for 'add' type)
+    Returns:
+        JSON string with status and message
+    """
+    try:
+        project_path = f"awx-projects/{path}"
+        
+        if type == "add":
+            if not path or not filename or not content:
+                return json.dumps({"status": False, "message": "Missing required parameters for add operation"})
+            if not filename.endswith(".yml") or not filename.endswith(".yaml"):
+                filename = f"{filename}.yml"
+            if os.path.exists(project_path):
+                return json.dumps({"status": False, "message": "this path is already exist"})
+            
+            try:
+                os.makedirs(project_path, exist_ok=True)
+                file_path = f"{project_path}/{filename}"
+                
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    
+                return json.dumps({"status": True, "message": "the project local path and content created successfully"})
+            except Exception as e:
+                return json.dumps({"status": False, "message": f"Failed to create file: {str(e)}"})
+        
+        elif type == "remove":
+            if not path:
+                return json.dumps({"status": False, "message": "Missing path parameter for remove operation"})
+                
+            try:
+                if os.path.exists(project_path):
+                    shutil.rmtree(project_path)
+                    
+                return json.dumps({"success": True, "message": "the project local path deleted successfully"})
+            except Exception as e:
+                return json.dumps({"status": False, "message": f"Failed to remove directory: {str(e)}"})
+        
+        return json.dumps({"status": False, "message": "Invalid operation type"})
+    except Exception as e:
+        error_details = traceback.format_exc()
+        return json.dumps({
+            "status": False, 
+            "message": f"An unexpected error occurred: {str(e)}",
+            "error_details": error_details
+        })
 
 @function_tool
 def call_awx_api(method: str, endpoint: str, params: Dict = None, data: Dict = None) -> str:

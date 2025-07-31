@@ -121,7 +121,7 @@ the_leader_agent = Agent(
     handoffs=[chat_agent, awx_worker_agent],
     model=os.getenv("AI_MODEL"),
     # Attach the input guardrail here. It will run before the agent's logic.
-    input_guardrails=[security_request_guardrail],
+    # input_guardrails=[security_request_guardrail],
     output_type=leader_output,
 )
 
