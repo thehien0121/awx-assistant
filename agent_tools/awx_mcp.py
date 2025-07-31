@@ -262,7 +262,7 @@ def check_project_manual_path(type: str, path: str, filename: str = None, conten
         filename: YAML file name (required for 'add' type)
         content: YAML file content (required for 'add' type)
     Returns:
-        JSON string with status and message
+        JSON string with status, message and the project path
     """
     try:
         project_path = f"awx-projects/{path}"
@@ -282,7 +282,7 @@ def check_project_manual_path(type: str, path: str, filename: str = None, conten
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
                     
-                return json.dumps({"status": True, "message": "the project local path and content created successfully"})
+                return json.dumps({"status": True, "message": "the project local path and content created successfully", "project_path": project_path})
             except Exception as e:
                 return json.dumps({"status": False, "message": f"Failed to create file: {str(e)}"})
         
@@ -294,7 +294,7 @@ def check_project_manual_path(type: str, path: str, filename: str = None, conten
                 if os.path.exists(project_path):
                     shutil.rmtree(project_path)
                     
-                return json.dumps({"success": True, "message": "the project local path deleted successfully"})
+                return json.dumps({"success": True, "message": "the project local path deleted successfully", "project_path": project_path})
             except Exception as e:
                 return json.dumps({"status": False, "message": f"Failed to remove directory: {str(e)}"})
         
