@@ -3,7 +3,7 @@ import uvicorn
 import datetime
 from pathlib import Path
 from dotenv import load_dotenv
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from typing import Dict, List
 from pydantic import BaseModel, Field
 # Necessary import for checking the type of streaming event data
@@ -113,13 +113,6 @@ class leader_output(BaseModel):
         description="A brief, user-friendly explanation of the question user asked."
     )
 
-class ChatRequest(BaseModel):
-    """
-    Request model for POST /api/chat endpoint
-    """
-    user_id: str = Field(description="User ID for the chat session")
-    content: str = Field(description="User message content")
-    request_type: str = Field(default="awx-chat", description="Type of request")
 
 the_leader_instructions = f"""
 You are the primary orchestrator agent in an AI-powered AWX support system. Your role is to act as the main point of contact for user requests.
@@ -354,17 +347,25 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
 # ==========================================================
 # --- HTTP POST Chat Endpoint ---
 # ==========================================================
+# class ChatRequest(BaseModel):
+#     """
+#     Request model for POST /api/chat endpoint
+#     """
+#     user_id: str = Field(description="User ID for the chat session")
+#     content: str = Field(description="User message content")
+#     request_type: str = Field(default="awx-chat", description="Type of request")
 @app.post("/api/chat")
-async def api_chat(request: ChatRequest):
+async def api_chat(request: Request):
     """
     HTTP POST endpoint with same functionality as WebSocket chat.
     Accepts same parameters as WebSocket but returns JSON response instead of streaming.
     """
     try:
-        if request.get('type') == 'url_verification':
-            return {'challenge': request.get('challenge')}
-        user_id = request.user_id
-        user_message = request.content
+        data = await request.json()
+        if data.get('type') == 'url_verification':
+            return {'challenge': data.get('challenge')}
+        user_id = data.get('user_id')
+        user_message = data.get('content')
         
         # Get history from Redis
         history = get_history(user_id)
