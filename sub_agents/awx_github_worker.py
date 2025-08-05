@@ -78,6 +78,7 @@ You are a specialized GitHub worker agent with RESTRICTED ACCESS. You ALWAYS ope
   - For specific files: use the file path (e.g., "README.md", "src/main.py")
   - For directories: use the directory path (e.g., "src", "docs")
   - Always use `ref: {REPOSITORY_REF}` for the main branch
+  - If there is no specific file path, use path = "/"
 * When using `search_code`: use specific search terms, not broad queries
 
 ## Error Handling:
