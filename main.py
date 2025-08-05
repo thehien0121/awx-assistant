@@ -113,6 +113,14 @@ class leader_output(BaseModel):
         description="A brief, user-friendly explanation of the question user asked."
     )
 
+class ChatRequest(BaseModel):
+    """
+    Request model for POST /api/chat endpoint
+    """
+    user_id: str = Field(description="User ID for the chat session")
+    content: str = Field(description="User message content")
+    request_type: str = Field(default="awx-chat", description="Type of request")
+
 the_leader_instructions = f"""
 You are the primary orchestrator agent in an AI-powered AWX support system. Your role is to act as the main point of contact for user requests.
 Carefully analyze each user request, determine the required expertise or action, and delegate the task to the most appropriate sub-agent in the system.
@@ -342,6 +350,93 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
 
 
 
+
+# ==========================================================
+# --- HTTP POST Chat Endpoint ---
+# ==========================================================
+@app.post("/api/chat")
+async def api_chat(request: ChatRequest):
+    """
+    HTTP POST endpoint with same functionality as WebSocket chat.
+    Accepts same parameters as WebSocket but returns JSON response instead of streaming.
+    """
+    try:
+        user_id = request.user_id
+        user_message = request.content
+        
+        # Get history from Redis
+        history = get_history(user_id)
+        
+        # Embed user_id in the message content for agent to extract
+        enhanced_message = f"[USER_ID: {user_id}] {user_message}"
+        
+        prompt_input = history.copy()
+        prompt_input.append({"role": "user", "content": enhanced_message})
+        
+        print(f"[API] Executing agent: {the_leader_agent.name}")
+        result = await Runner.run(the_leader_agent, prompt_input, max_turns=40)
+        
+        print("[API]   - Processing complete.")
+        
+        if result.final_output:
+            final_data = result.final_output.model_dump()
+            print(f"[API] Agent produced final output.")
+            print(f"[API]   - Last agent run: {result.last_agent.name}")
+            print(f"[API]   - Output data type: {type(result.final_output).__name__}")
+            
+            assistant_result = getattr(result.final_output, 'result', '')
+            assistant_explanation = getattr(result.final_output, 'explanation', '')
+            assistant_tool_name = getattr(result.final_output, 'tool_name', '')
+            
+            if assistant_explanation:
+                assistant_message = {"role": "assistant", "content": assistant_explanation, "tool_result": assistant_result, "tool_name": assistant_tool_name}
+                # Save original user message without [USER_ID: xxx] prefix
+                updated_history = history + [{"role": "user", "content": user_message}, assistant_message]
+                save_history(user_id, updated_history)
+                print("[API]   - Conversation history saved to Redis.")
+            
+            return {
+                "status": "success",
+                "user_id": user_id,
+                "response": final_data,
+                "message": assistant_explanation or "Task completed"
+            }
+        else:
+            return {
+                "status": "error", 
+                "user_id": user_id,
+                "message": "No response generated"
+            }
+            
+    except InputGuardrailTripwireTriggered as e:
+        # Handle guardrail blocks same as WebSocket
+        reasoning = "No specific reason provided."
+        if (hasattr(e, 'guardrail_result') and e.guardrail_result and
+            hasattr(e.guardrail_result, 'output') and e.guardrail_result.output and
+            hasattr(e.guardrail_result.output, 'output_info') and e.guardrail_result.output.output_info and
+            hasattr(e.guardrail_result.output.output_info, 'reasoning')):
+            reasoning = e.guardrail_result.output.output_info.reasoning
+        
+        print(f"[API] [GUARDRAIL] Request blocked. Reason: {reasoning}")
+        
+        # Save blocked interaction to history
+        updated_history = history + [{"role": "user", "content": user_message}, {"role": "assistant", "content": "I am here to help you with Ansible AWX so right now I can't help you with that."}]
+        save_history(user_id, updated_history)
+        
+        return {
+            "status": "blocked",
+            "user_id": user_id,
+            "message": "I am here to help you with Ansible AWX so right now I can't help you with that.",
+            "reason": reasoning
+        }
+        
+    except Exception as e:
+        print(f"[API] [ERROR] An unexpected error occurred: {e}")
+        return {
+            "status": "error",
+            "user_id": user_id, 
+            "message": f"An error occurred: {str(e)}"
+        }
 
 # ==========================================================
 # --- Health Check Endpoint ---
