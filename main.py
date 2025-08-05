@@ -361,6 +361,8 @@ async def api_chat(request: ChatRequest):
     Accepts same parameters as WebSocket but returns JSON response instead of streaming.
     """
     try:
+        if request.get('type') == 'url_verification':
+            return {'challenge': request.get('challenge')}
         user_id = request.user_id
         user_message = request.content
         
