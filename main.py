@@ -14,7 +14,6 @@ import logfire
 import redis
 import json
 
-
 # --- Load Environment Variables ---
 dotenv_file = Path(__file__).parent / ".env"
 print("DEBUG load_dotenv file:", dotenv_file)
@@ -60,16 +59,37 @@ set_default_openai_api("chat_completions")
 from sub_agents.chat_guardrails import security_request_guardrail
 from sub_agents.chat_agent import chat_agent
 from sub_agents.awx_worker import awx_worker_agent
+from sub_agents.awx_github_worker import awx_github_agent, connect_github_server
+
+# Global variable for leader agent
+the_leader_agent = None
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    global the_leader_agent
+    
     # This code runs on startup.
-    logfire.configure()
+    logfire.configure(environment=os.getenv("LOGFIRE_ENVIRONMENT", "local"))
     logfire.instrument_fastapi(app)
     logfire.instrument_openai_agents()
     logfire.instrument_openai()
 
     print("--- Logfire configured and instrumented for FastAPI and Agents ---")
+    
+    # Connect GitHub server
+    await connect_github_server()
+    
+    # Initialize leader agent
+    the_leader_agent = Agent(
+        name="The leader",
+        instructions=the_leader_instructions,
+        handoffs=[chat_agent, awx_worker_agent, awx_github_agent],
+        model=os.getenv("AI_MODEL"),
+        # Attach the input guardrail here. It will run before the agent's logic.
+        # input_guardrails=[security_request_guardrail],
+        output_type=leader_output,
+    )
+    
     yield
     # This code runs on shutdown.
     print("--- Flushing logs before shutdown ---")
@@ -94,17 +114,24 @@ class leader_output(BaseModel):
     )
 
 
-the_leader_instructions = """
+the_leader_instructions = f"""
 You are the primary orchestrator agent in an AI-powered AWX support system. Your role is to act as the main point of contact for user requests.
 Carefully analyze each user request, determine the required expertise or action, and delegate the task to the most appropriate sub-agent in the system.
 - If the request involves technical explanation or general Ansible/system knowledge, hand it off to the chat_agent.
 - If the request requires executing actions on AWX via API tools, assign it to the awx_worker agent.
+- If the request requires executing actions on GitHub, assign it to the awx_github_agent, this agent only work with one repository and branch. Repo: {os.getenv("ALLOWED_REPOSITORY")}, branch: {os.getenv("ALLOWED_BRANCH")}, url: {os.getenv("REPOSITORY_URL")}.
 
-**Before handing off any execution task to the awx_worker agent, you must:**
-1. Generate a concise, step-by-step summary of the planned actions (including which AWX API endpoints will be called, what resources will be affected, and the expected results).
-2. Present this summary to the user and request their explicit confirmation before proceeding.
-3. Only after the user confirms, you may hand off the execution to the awx_worker agent.
-4. If the user asks for clarification or changes, update the plan and repeat the confirmation process.
+**Before handing off any execution task to the awx_worker or awx_github_agent, you must:**
+***For tasks that do not modify data (read-only operations):***
+- You may execute the task immediately without requiring user confirmation.
+- Examples: retrieving job lists, reading configurations, querying status, etc.
+
+***For tasks that modify data (write operations):***
+- Request the user to provide all required information for the operation (such as name, ID, parameters, or details of the changes).
+- Once all necessary information is collected, generate a concise, step-by-step summary of the planned actions (including which AWX API endpoints will be called, what resources will be affected, and the expected results).
+- Present this summary to the user and request their explicit confirmation before proceeding.
+- Only after the user confirms, you may hand off the execution to the awx_worker agent.
+- If the user asks for clarification or changes, update the plan and repeat the confirmation process.
 
 Always ensure that the user receives a clear and concise answer or result. Coordinate between agents as necessary, and maintain the flow of conversation or task completion.
 
@@ -113,17 +140,6 @@ Always ensure that the user receives a clear and concise answer or result. Coord
 2. You are prefer to delegate the task to the sub-agent, but if the task is simple and you think you can handle it yourself, you can directly answer the user, but in most case, you should delegate the task to the sub-agent.
 
 """
-
-the_leader_agent = Agent(
-    name="The leader",
-    instructions=the_leader_instructions,
-    # The list of agents this manager can handoff to is crucial for its decision-making.
-    handoffs=[chat_agent, awx_worker_agent],
-    model=os.getenv("AI_MODEL"),
-    # Attach the input guardrail here. It will run before the agent's logic.
-    # input_guardrails=[security_request_guardrail],
-    output_type=leader_output,
-)
 
 
 def get_history(user_id: str, all_fields: bool = False) -> List[Dict]:

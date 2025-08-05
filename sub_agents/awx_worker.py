@@ -70,4 +70,4 @@ awx_worker_agent = Agent(
         call_awx_api,
         check_project_manual_path
     ]
-) 
+)

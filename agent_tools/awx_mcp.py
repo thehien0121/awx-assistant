@@ -257,10 +257,10 @@ def check_project_manual_path(type: str, path: str, filename: str = None, conten
     """
     Check and manage project manual paths.
     Args:
-        type: Operation type ('add' or 'remove')
+        type: Operation type ('add', 'edit', or 'remove')
         path: Project path (e.g. 'get_timezone', 'get_status')
-        filename: YAML file name (required for 'add' type)
-        content: YAML file content (required for 'add' type)
+        filename: YAML file name (required for 'add' and 'edit' types)
+        content: YAML file content (required for 'add' and 'edit' types)
     Returns:
         JSON string with status, message and the project path
     """
@@ -286,6 +286,27 @@ def check_project_manual_path(type: str, path: str, filename: str = None, conten
             except Exception as e:
                 return json.dumps({"status": False, "message": f"Failed to create file: {str(e)}"})
         
+        elif type == "edit":
+            if not path or not filename or not content:
+                return json.dumps({"status": False, "message": "Missing required parameters for edit operation"})
+            if not filename.endswith(".yaml"):
+                filename = f"{filename}.yaml"
+                
+            try:
+                project_path = f"awx-projects/{path}"
+                file_path = f"{project_path}/{filename}"
+                
+                # Create directory if it doesn't exist
+                os.makedirs(project_path, exist_ok=True)
+                
+                # Write/overwrite the file content
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(content)
+                    
+                return json.dumps({"status": True, "message": "the file content was updated successfully", "project_path": project_path})
+            except Exception as e:
+                return json.dumps({"status": False, "message": f"Failed to update file: {str(e)}"})
+                
         elif type == "remove":
             if not path:
                 return json.dumps({"status": False, "message": "Missing path parameter for remove operation"})
