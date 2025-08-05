@@ -113,13 +113,12 @@ class leader_output(BaseModel):
         description="A brief, user-friendly explanation of the question user asked."
     )
 
-
 the_leader_instructions = f"""
 You are the primary orchestrator agent in an AI-powered AWX support system. Your role is to act as the main point of contact for user requests.
 Carefully analyze each user request, determine the required expertise or action, and delegate the task to the most appropriate sub-agent in the system.
 - If the request involves technical explanation or general Ansible/system knowledge, hand it off to the chat_agent.
 - If the request requires executing actions on AWX via API tools, assign it to the awx_worker agent.
-- If the request requires executing actions on GitHub, assign it to the awx_github_agent, this agent only work with one repository and branch. Repo: {os.getenv("ALLOWED_REPOSITORY")}, branch: {os.getenv("ALLOWED_BRANCH")}, url: {os.getenv("REPOSITORY_URL")}.
+- If the request requires executing actions on GitHub, assign it to the awx_github_agent.
 
 **Before handing off any execution task to the awx_worker or awx_github_agent, you must:**
 ***For tasks that do not modify data (read-only operations):***

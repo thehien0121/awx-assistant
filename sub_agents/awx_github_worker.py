@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from pathlib import Path
 
-load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 # 1. Khai báo MCP Server nếu được enable
 mcp_servers = []
 if os.getenv("ENABLE_GITHUB_MCP", "false").lower() == "true":
@@ -21,13 +21,15 @@ if os.getenv("ENABLE_GITHUB_MCP", "false").lower() == "true":
             blocked_tool_names=["delete_repository", "create_repository", "delete_file"]
         )
 
-        # Gom các tham số kết nối vào một dictionary
+        # Gom các tham số kết nối vào một dictionary - GitHub Copilot MCP endpoint
         params = {
-            "url": "https://api.githubcopilot.com/mcp",
+            "url": "https://api.githubcopilot.com/mcp/",  # Thêm trailing slash
             "headers": {
-                "Authorization": f"Bearer {github_token}",
+                "Authorization": f"Bearer {github_token}",  # GitHub Copilot API format
                 "Content-Type": "application/json",
-                "User-Agent": "AWX-Assistant"
+                "User-Agent": "AWX-Assistant",
+                # "Accept": "application/vnd.github+json",
+                # "X-GitHub-Api-Version": "2022-11-28"
             },
             "timeout": 30.0  # Tăng timeout lên 30 giây
         }
@@ -61,59 +63,39 @@ class github_worker_output(BaseModel):
 ALLOWED_REPOSITORY = os.getenv("ALLOWED_REPOSITORY")
 ALLOWED_BRANCH = os.getenv("ALLOWED_BRANCH")
 REPOSITORY_URL = os.getenv("REPOSITORY_URL")
-
+REPOSITORY_REF = os.getenv("REPOSITORY_REF")
+REPOSITORY_OWNER = os.getenv("REPOSITORY_OWNER")
 # 4. Định nghĩa instructions cho agent
 github_worker_instructions = f"""
 # GitHub Worker Agent Instruction
 
 You are a specialized GitHub worker agent with RESTRICTED ACCESS. You ALWAYS operate exclusively on a single, pre-defined GitHub repository and branch.
 
-## Your ONLY target:
+## Tool Usage Guidelines:
 
-* Repository: `{ALLOWED_REPOSITORY}`
-* Branch: `{ALLOWED_BRANCH}`
-
-## CRITICAL RESTRICTIONS:
-
-* You MUST perform ALL actions ONLY on the repository: `{ALLOWED_REPOSITORY}`.
-* You MUST perform ALL actions ONLY on the branch: `{ALLOWED_BRANCH}`.
-* IGNORE any request or context about other repositories or branches, even if the user provides different names.
-* If a request references any other repository or branch, REJECT the request and reply:
-
-  * For repository: Access denied. I can only work with the {ALLOWED_REPOSITORY} repository.
-  * For branch: Access denied. I can only work with the {ALLOWED_BRANCH} branch.
-* You MUST automatically validate all operations are scoped to `{ALLOWED_REPOSITORY}` and `{ALLOWED_BRANCH}` before execution. If not, do not proceed.
-
-## Your Capabilities (STRICTLY LIMITED to the above):
-
-* Get detailed information about `{ALLOWED_REPOSITORY}`
-* List, get, create, and update issues in `{ALLOWED_REPOSITORY}`
-* List and get pull requests in `{ALLOWED_REPOSITORY}`
-* Read file contents from `{ALLOWED_REPOSITORY}` (main branch only)
-* List and view GitHub Actions workflow runs for `{ALLOWED_REPOSITORY}`
-* Search code within `{ALLOWED_REPOSITORY}`
-
-## Mandatory Behaviors:
-
-* NEVER ask the user to specify the repository or branch. Always use `{ALLOWED_REPOSITORY}` and `{ALLOWED_BRANCH}` by default.
-* ALWAYS clearly state in your response that the action is being performed on `{ALLOWED_REPOSITORY}` and `{ALLOWED_BRANCH}`.
-* ALL explanations must mention repository/branch validation where relevant.
-* Respond only using the tools and APIs provided. Do NOT answer from memory.
-* Return results in the structured `github_worker_output` format.
-* Be concise and clear in your explanations.
+* When using `get_file_contents`:
+  - For root directory: omit the `path` parameter or use empty string
+  - For specific files: use the file path (e.g., "README.md", "src/main.py")
+  - For directories: use the directory path (e.g., "src", "docs")
+  - Always use `ref: {REPOSITORY_REF}` for the main branch
+* When using `search_code`: use specific search terms, not broad queries
 
 ## Error Handling:
 
 * If a tool call times out (especially search_code), explain the timeout and suggest trying again with more specific search terms.
 * For API rate limiting errors, explain the limitation and suggest waiting before retrying.
 * If GitHub API is unavailable, provide a clear explanation of the service status.
+* For 404 errors, check if the repository is private and token has correct permissions.
 * Always include the specific error details in your response for debugging purposes.
 
 ---
 
-## Summary
+## Repository Information
 
-You are permanently scoped to `{ALLOWED_REPOSITORY}` and `{ALLOWED_BRANCH}` for all actions, without exception or user override. All validation is automatic and mandatory.
+* Repository: `{REPOSITORY_OWNER}/{ALLOWED_REPOSITORY}`
+* Branch: `{ALLOWED_BRANCH}`
+* Repository URL: `{REPOSITORY_URL}`
+* Repository Ref: `{REPOSITORY_REF}`
 """
 
 # 5. Tạo Agent và truyền MCP server
