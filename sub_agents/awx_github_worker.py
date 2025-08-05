@@ -28,7 +28,8 @@ if os.getenv("ENABLE_GITHUB_MCP", "false").lower() == "true":
                 "Authorization": f"Bearer {github_token}",
                 "Content-Type": "application/json",
                 "User-Agent": "AWX-Assistant"
-            }
+            },
+            "timeout": 30.0  # Tăng timeout lên 30 giây
         }
 
         # Khai báo server và truyền dict `params` vào
@@ -100,6 +101,13 @@ You are a specialized GitHub worker agent with RESTRICTED ACCESS. You ALWAYS ope
 * Respond only using the tools and APIs provided. Do NOT answer from memory.
 * Return results in the structured `github_worker_output` format.
 * Be concise and clear in your explanations.
+
+## Error Handling:
+
+* If a tool call times out (especially search_code), explain the timeout and suggest trying again with more specific search terms.
+* For API rate limiting errors, explain the limitation and suggest waiting before retrying.
+* If GitHub API is unavailable, provide a clear explanation of the service status.
+* Always include the specific error details in your response for debugging purposes.
 
 ---
 
