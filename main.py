@@ -275,8 +275,13 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
     try:
         user_id = data.get("user_id", "")
         user_message = data.get("content", "")
+        
+        # Embed user_id in the message content for agent to extract
+        enhanced_message = f"[USER_ID: {user_id}] {user_message}"
+        
         prompt_input = history.copy()
-        prompt_input.append({"role": "user", "content": user_message})
+        prompt_input.append({"role": "user", "content": enhanced_message})
+        
         print(f"[WORKFLOW] Executing agent: {the_leader_agent.name}")
         stream = Runner.run_streamed(the_leader_agent, prompt_input, max_turns=40)
         final_text_content = ""
@@ -305,6 +310,7 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
             assistant_tool_name = getattr(stream.final_output, 'tool_name', '')
             if assistant_explanation:
                 assistant_message = {"role": "assistant", "content": assistant_explanation, "tool_result": assistant_result, "tool_name": assistant_tool_name}
+                # Save original user message without [USER_ID: xxx] prefix
                 updated_history = history + [{"role": "user", "content": user_message}, assistant_message]
                 save_history(user_id, updated_history)
                 print("[WORKFLOW]   - Conversation history saved to Redis.")
@@ -328,7 +334,7 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
             "request_type": socket_request_type["chat"],
             "content": {"explanation": "I am here to help you with Ansible AWX so right now I can't help you with that."}
         })
-        user_message = data.get("content", "")
+        # Save original user message without [USER_ID: xxx] prefix
         updated_history = history + [{"role": "user", "content": user_message}, {"role": "assistant", "content": "I am here to help you with Ansible AWX so right now I can't help you with that."}]
         save_history(user_id, updated_history)
         # This turn failed, so we don't return anything or modify history.
