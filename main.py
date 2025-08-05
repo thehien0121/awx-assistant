@@ -362,6 +362,7 @@ async def api_chat(request: Request):
     """
     try:
         data = await request.json()
+        print(f"[API] Received data: {data}")
         if data.get('type') == 'url_verification':
             return {'challenge': data.get('challenge')}
         user_id = data.get('user_id')
