@@ -1,6 +1,7 @@
 import os
 import uvicorn
 import datetime
+import asyncio
 from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
@@ -13,6 +14,8 @@ from contextlib import asynccontextmanager
 import logfire
 import redis
 import json
+import requests
+from requests.auth import HTTPBasicAuth
 
 # --- Load Environment Variables ---
 dotenv_file = Path(__file__).parent / ".env"
@@ -60,6 +63,16 @@ from sub_agents.chat_guardrails import security_request_guardrail
 from sub_agents.chat_agent import chat_agent
 from sub_agents.awx_worker import awx_worker_agent
 from sub_agents.awx_github_worker import awx_github_agent, connect_github_server
+
+# --- Import Slack Functions ---
+from slack_connection.slack_functions import (
+    background_slack_response, 
+    login_ldap_from_slack,
+    open_login_modal
+)
+
+# --- Import Conversation ---
+from conversations.conversation import get_history, save_history
 
 # Global variable for leader agent
 the_leader_agent = None
@@ -139,71 +152,15 @@ Always ensure that the user receives a clear and concise answer or result. Coord
 1. Your final output must be the answer to the question, wrapped in a structured `leader_output` format.
 2. You are prefer to delegate the task to the sub-agent, but if the task is simple and you think you can handle it yourself, you can directly answer the user, but in most case, you should delegate the task to the sub-agent.
 
+
+### Information about yourself:
+- Name: Infra team AWX Agent
+- From: Thankslab VN - Infrastructure team
+- Author: Mr.Hien - le.tran.the.hien@thankslab.biz
+- Base URL: {os.getenv("ANSIBLE_BASE_URL")}, user can talk with you in this URL.
 """
 
 
-def get_history(user_id: str, all_fields: bool = False) -> List[Dict]:
-    """
-    Get the saved history of the conversation for a given user and project from Redis.
-    If the history contains more than 20 items, only the last 20 are returned.
-    """
-    if redis_client is None:
-        print("Redis not available, returning empty history")
-        return []
-        
-    redis_key = f"awx_chat_{user_id}"
-    try:
-        user_data = redis_client.get(redis_key)
-        if user_data is None:
-            return []
-        user_data = json.loads(user_data)
-        if not isinstance(user_data, list):
-            return []
-        if all_fields:
-            return user_data[-20:]
-        else:
-            result = []
-            for item in user_data:
-                result.append({
-                    "role": item["role"],
-                    "content": item["content"]
-                })
-            return result[-20:]
-    except (redis.RedisError, json.JSONDecodeError) as e:
-        print(f"Error getting history from Redis: {e}")
-    return []
-
-def save_history(user_id: str, new_history: List[Dict]):
-    """
-    Save the updated conversation history back to Redis.
-    """
-    if redis_client is None:
-        print("Redis not available, skipping history save")
-        return
-        
-    redis_key = f"awx_chat_{user_id}"
-    try:
-        # Start a transaction
-        with redis_client.pipeline() as pipe:
-            # Watch the key for changes
-            pipe.watch(redis_key)
-            # Get current data
-            user_data = pipe.get(redis_key)
-            user_data = json.loads(user_data) if user_data else {}
-            # Update the history for the specific project
-            user_data = new_history
-            # Start MULTI block
-            pipe.multi()
-            # Set the new value
-            pipe.set(redis_key, json.dumps(user_data))
-            # Execute the transaction
-            pipe.execute()
-    except redis.WatchError:
-        # Handle the case where the key was modified by another client
-        print(f"WatchError: chat_{user_id} was modified, retrying transaction...")
-        save_history(user_id, new_history) # Simple retry
-    except (redis.RedisError, json.JSONDecodeError) as e:
-        print(f"Error saving history to Redis: {e}")
 
 
 # ==========================================================
@@ -354,6 +311,7 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
 #     user_id: str = Field(description="User ID for the chat session")
 #     content: str = Field(description="User message content")
 #     request_type: str = Field(default="awx-chat", description="Type of request")
+# Note: This endpoint is used for Slack webhook, it will response immediately to prevent duplicate message and process the response message in background.
 @app.post("/api/chat")
 async def api_chat(request: Request):
     """
@@ -362,55 +320,20 @@ async def api_chat(request: Request):
     """
     try:
         data = await request.json()
-        print(f"[API] Received data: {data}")
         if data.get('type') == 'url_verification':
             return {'challenge': data.get('challenge')}
-        user_id = data.get('user_id')
-        user_message = data.get('content')
         
-        # Get history from Redis
-        history = get_history(user_id)
-        
-        # Embed user_id in the message content for agent to extract
-        enhanced_message = f"[USER_ID: {user_id}] {user_message}"
-        
-        prompt_input = history.copy()
-        prompt_input.append({"role": "user", "content": enhanced_message})
-        
-        print(f"[API] Executing agent: {the_leader_agent.name}")
-        result = await Runner.run(the_leader_agent, prompt_input, max_turns=40)
-        
-        print("[API]   - Processing complete.")
-        
-        if result.final_output:
-            final_data = result.final_output.model_dump()
-            print(f"[API] Agent produced final output.")
-            print(f"[API]   - Last agent run: {result.last_agent.name}")
-            print(f"[API]   - Output data type: {type(result.final_output).__name__}")
-            
-            assistant_result = getattr(result.final_output, 'result', '')
-            assistant_explanation = getattr(result.final_output, 'explanation', '')
-            assistant_tool_name = getattr(result.final_output, 'tool_name', '')
-            
-            if assistant_explanation:
-                assistant_message = {"role": "assistant", "content": assistant_explanation, "tool_result": assistant_result, "tool_name": assistant_tool_name}
-                # Save original user message without [USER_ID: xxx] prefix
-                updated_history = history + [{"role": "user", "content": user_message}, assistant_message]
-                save_history(user_id, updated_history)
-                print("[API]   - Conversation history saved to Redis.")
-            
-            return {
-                "status": "success",
-                "user_id": user_id,
-                "response": final_data,
-                "message": assistant_explanation or "Task completed"
-            }
-        else:
-            return {
-                "status": "error", 
-                "user_id": user_id,
-                "message": "No response generated"
-            }
+        event = data.get('event')
+        event_type = event.get('type')
+        channel = event.get('channel')
+        slack_user_id = event.get('user')
+        user_message = event.get('text')
+        if event.get("subtype") == "bot_message" or event.get("bot_id") is not None:
+            print(f"[API] received bot message -- SKIPPING: {channel} - user_id: {slack_user_id} - user_message: {user_message} - event type: {event_type}")
+            return {'ok': True}
+        print(f"[API] received channel: {channel} - user_id: {slack_user_id} - user_message: {user_message} - event type: {event_type}")
+        asyncio.create_task(background_slack_response(channel, slack_user_id, user_message, event_type, the_leader_agent))
+        return {'ok': True}
             
     except InputGuardrailTripwireTriggered as e:
         # Handle guardrail blocks same as WebSocket
@@ -422,25 +345,29 @@ async def api_chat(request: Request):
             reasoning = e.guardrail_result.output.output_info.reasoning
         
         print(f"[API] [GUARDRAIL] Request blocked. Reason: {reasoning}")
-        
-        # Save blocked interaction to history
-        updated_history = history + [{"role": "user", "content": user_message}, {"role": "assistant", "content": "I am here to help you with Ansible AWX so right now I can't help you with that."}]
-        save_history(user_id, updated_history)
-        
-        return {
-            "status": "blocked",
-            "user_id": user_id,
-            "message": "I am here to help you with Ansible AWX so right now I can't help you with that.",
-            "reason": reasoning
-        }
+        return {'ok': True}
         
     except Exception as e:
         print(f"[API] [ERROR] An unexpected error occurred: {e}")
-        return {
-            "status": "error",
-            "user_id": user_id, 
-            "message": f"An error occurred: {str(e)}"
-        }
+        return {'ok': True}
+
+# ==========================================================
+# --- Login from Slack Endpoint ---
+# ==========================================================
+@app.post("/api/login-from-slack")
+async def login_from_slack(request: Request):
+    """
+    Login from Slack endpoint
+    """
+    form_data = await request.form()
+    payload = json.loads(form_data["payload"])
+    if payload["type"] == "block_actions":
+        open_login_modal(payload["trigger_id"], payload["container"]["channel_id"])
+        return {"response_action": "clear"}
+    elif payload["type"] == "view_submission":
+        await login_ldap_from_slack(payload)
+        return {"response_action": "clear"}
+    return {'ok': True}
 
 # ==========================================================
 # --- Health Check Endpoint ---
@@ -486,4 +413,4 @@ async def health_check():
 # This block allows you to run the server directly with `python main.py`
 if __name__ == "__main__":
     port = int(os.getenv("MAIN_PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
