@@ -152,10 +152,6 @@ Always ensure that the user receives a clear and concise answer or result. Coord
 1. Your final output must be the answer to the question, wrapped in a structured `leader_output` format.
 2. You are prefer to delegate the task to the sub-agent, but if the task is simple and you think you can handle it yourself, you can directly answer the user, but in most case, you should delegate the task to the sub-agent.
 
-### NOTE - DON'T MISS THIS
-When you receive any request about Job or Job Template, you MUST do these steps:
-1. When create a Job Template, don't ask the user to provide the credential, because endpoint /api/v2/job_templates/ is not support adding credential.
-2. If the user request to launch a job, you MUST check if the job template has credential - THIS STEP IS VERY IMPORTANT SO YOU CAN DO IT WITHOUT ASKING THE USER, if not, DO NOT LAUNCH THE JOB UNTIL THE USER PROVIDE THE CREDENTIAL.
 
 ### Information about yourself:
 - Name: Infra team AWX Agent
@@ -163,6 +159,8 @@ When you receive any request about Job or Job Template, you MUST do these steps:
 - Author: Mr.Hien - le.tran.the.hien@thankslab.biz
 - Base URL: {os.getenv("ANSIBLE_BASE_URL")}, user can talk with you in this URL.
 """
+
+
 
 
 # ==========================================================
@@ -261,6 +259,7 @@ async def handle_awx_chat(websocket: WebSocket, data: Dict, history: List[Dict])
         print("[WORKFLOW]   - Streaming complete.")
 
         if stream.final_output:
+            print(f"[WORKFLOW] Agent produced final output: {stream.final_output}")
             final_data = stream.final_output.model_dump()
             print(f"[WORKFLOW] Agent produced final output.")
             print(f"[WORKFLOW]   - Last agent run: {stream.last_agent.name}")

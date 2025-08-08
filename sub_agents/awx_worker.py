@@ -16,8 +16,11 @@ class awx_worker_output(BaseModel):
     """
     Represents the result of a Function calling, containing the result of the function calling and the explanation of the result.
     """
-    result: str = Field(
+    tool_result: str = Field(
         description="This field only use for the result of the function calling, other information should be in the explanation field."
+    )
+    result: str = Field(
+        description="This field is a nicer, more readable, friendly version of tool_result."
     )
     explanation: str = Field(
         description="A brief, user-friendly explanation of the result of the function calling, or the response to the user question."

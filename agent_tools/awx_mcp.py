@@ -244,9 +244,12 @@ def document_search(url: str) -> str:
         "bulk": "/api/v2/bulk/",
         "analytics": "/api/v2/analytics/",
         "service_index": "/api/v2/service-index/",
-        
     Args:
         url: {ANSIBLE_BASE_URL} the API path of the tool you gonna use (e.g. /api/v2/inventories/)
+    NOTE - DON'T MISS THIS
+    When you receive any request about Job or Job Template, you MUST do these steps:
+    1. When create a Job Template, don't ask the user to provide the credential, because endpoint /api/v2/job_templates/ is not support adding credential.
+    2. If the user request to launch a job, you MUST check if the job template has credential - THIS STEP IS VERY IMPORTANT SO YOU CAN DO IT WITHOUT ASKING THE USER, if not, DO NOT LAUNCH THE JOB UNTIL THE USER PROVIDE THE CREDENTIAL.
     """
     client = get_ansible_client()
     resp = requests.options(client.base_url + url, headers=client.get_headers())
@@ -350,7 +353,10 @@ def call_awx_api(method: str, endpoint: str, params: Dict = None, data: Dict = N
     return client.request(method, endpoint, params=params, data=data)
     
 
-# Function Tools - Inventory Management
+# ==========================================================
+# --- Function Tools - Inventory Management ---
+# ==========================================================
+
 
 @function_tool
 def list_inventories(page_size: int = 100, page: int = 1) -> str:
