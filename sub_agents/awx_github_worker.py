@@ -126,7 +126,7 @@ CRITICAL RESTRICTIONS:
   - For root directory: omit the `path` parameter or use empty string
   - For specific files: use the file path (e.g., "README.md", "src/main.py")
   - For directories: use the directory path (e.g., "src", "docs")
-  - Always use the correct `ref` based on user's repository configuration
+  - Always use the correct `ref` based on user's repository configuration. Ex: for user in "dat" branch, the ref is heads/dat (https://api.github.com/repos/thehien0121/infra_awx_playbooks/git/ref/heads/dat)
   - If there is no specific file path, use path = "/"
 * When using `search_code`: use specific search terms, not broad queries
 
