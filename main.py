@@ -330,6 +330,9 @@ async def api_chat(request: Request):
         channel = event.get('channel')
         slack_user_id = event.get('user')
         user_message = event.get('text')
+        if slack_user_id is None or user_message is None:
+            print(f"[API] received unknown blank message -- SKIPPING: {channel} - user_id: {slack_user_id} - user_message: {user_message} - event type: {event_type}")
+            return {'ok': True}
         if event.get("subtype") == "bot_message" or event.get("bot_id") is not None:
             print(f"[API] received bot message -- SKIPPING: {channel} - user_id: {slack_user_id} - user_message: {user_message} - event type: {event_type}")
             return {'ok': True}
